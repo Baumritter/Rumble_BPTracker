@@ -3,22 +3,17 @@ using MelonLoader;
 using RUMBLE.Interactions.InteractionBase;
 using RUMBLE.Social.Phone;
 using System.IO;
+using System.Linq;
 using UnityEngine;
-//Plan:
-//Get UserData
-//  From Friend List (6 entries)
-//  From Recent List (No Info)
-//  From Other Players (No Info)
-//Write Name/BP to file
-//  Check if Name exists
-//      Check if BP is same
 namespace BPTracker
 {
     public class BPTrackerClass : MelonMod
     {
         //--------------------------------------------------
+        //--------------------------------------------------
         //constants
-        private const int SceneDelay = 450;
+        private const double SceneDelay = 5.0;
+        private const double RecentDelay = 5.0;
 
         private const string LogFilePath = @"UserData\BPTracker\Logs\BPList.csv";
         private const string PTag_1 = "Player Tag 2.0";
@@ -29,14 +24,21 @@ namespace BPTracker
         private const string PTag_6 = "Player Tag 2.0 (5)";
 
         //friendlist
-        private const string FriendList = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Friend Screen/Player Tags/";
-        private const string PageDown = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageDownButton/Button";
-        private const string PageUp = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageUpButton/Button";
-        private const string ScrollDown = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollDownButton/Button";
-        private const string ScrollUp = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollUpButton/Button";
+        private const string FriendList = "/Telephone 2.0 REDUX special edition/Friend Screen/Player Tags/";
+        private const string PageDown = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageDownButton/Button";
+        private const string PageUp = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageUpButton/Button";
+        private const string ScrollDown = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollDownButton/Button";
+        private const string ScrollUp = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollUpButton/Button";
 
         //recentlist
-        private const string RecentList = "--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Recent Screen/Player Tags/";
+        private const string RecentList = "/Telephone 2.0 REDUX special edition/Recent Screen/Player Tags/";
+        private const string SlidingObject = "/Telephone 2.0 REDUX special edition/Recent Screen";
+
+        //park-string
+        private const string ParkPrefix = "________________LOGIC__________________ /Heinhouwser products";
+
+        //gym-string
+        private const string GymPrefix = "--------------LOGIC--------------/Heinhouser products";
 
         //leaderboard
         private const string Leaderboard = "--------------LOGIC--------------/Heinhouser products/Leaderboard/Player Tags/";
@@ -48,24 +50,34 @@ namespace BPTracker
         private const string HTag_P = "PersonalHighscoreTag/";
 
         //--------------------------------------------------
+        //--------------------------------------------------
 
 
         //--------------------------------------------------
+        //--------------------------------------------------
         //variables
-        private readonly bool debug = true;
+        private readonly bool debug = false;
         private bool friendlistbuttonstate = false;
         private bool friendlistbuttonwait = false;
         private bool scenechanged = false;
+        private bool loaddelaydone = false;
+        private bool loadlockout = false;
+        private bool recentdelaydone = false;
+        private bool recentlockout = false;
+        private bool recentleverlockout = false;
+        private bool prefixlockout = false;
 
-        private int recentupdate = 0;
-        private int boarddelay = 0;
-        private int loaddelay = 0;
+        private DateTime boarddelay;
+        private DateTime loaddelay;
 
         private string currentScene = "";
         private string currentName = "";
         private string currentBP = "";
+        private string objprefix = "";
+        //--------------------------------------------------
         //--------------------------------------------------
 
+        //--------------------------------------------------
         //--------------------------------------------------
         //objects
         private PlayerTag playertag;
@@ -75,11 +87,14 @@ namespace BPTracker
         private InteractionButton b3;
         private InteractionButton b4;
         //--------------------------------------------------
+        //--------------------------------------------------
 
+        //--------------------------------------------------
         //--------------------------------------------------
         //structures/arrays/lists
         private string[] Tags = new string[6];
         private string[] Tags2 = new string[6];
+        //--------------------------------------------------
         //--------------------------------------------------
 
         //initializes things
@@ -106,18 +121,21 @@ namespace BPTracker
             //Base Updates
             base.OnUpdate();
 
+            LoadDelayLogic();
+            SwapPrefix();
+
             try
             {
-                if (currentScene == "Gym")
+                if (currentScene == "Gym" || currentScene == "Park")
                 {
-                    //Check for "log request"
+                    //Check for FriendList/RecentList Trigger
                     GetFriendListButtonStatus();
                     GetRecentPageStatus();
 
-                    if ((recentupdate == 1 | friendlistbuttonstate | scenechanged) && loaddelay <= 0)
+                    if ((friendlistbuttonstate | scenechanged | (recentdelaydone && !recentlockout)) && loaddelaydone)
                     {
                         //Leaderboard
-                        if (scenechanged)
+                        if (scenechanged && currentScene == "Gym")
                         {
                             for (int i = 0; i < Tags.Length; i++)
                             {
@@ -129,7 +147,7 @@ namespace BPTracker
                                 }
                             }
                             scenechanged = false;
-                            //Debug
+                            
                             if (debug) MelonLogger.Msg("Leaderboard Checked.");
 
                         }
@@ -139,7 +157,7 @@ namespace BPTracker
                         {
                             for (int i = 0; i < Tags.Length; i++)
                             {
-                                GetFromBoardList(FriendList + Tags[i]);
+                                GetFromBoardList(objprefix + FriendList + Tags[i]);
 
                                 if (currentName != "")
                                 {
@@ -147,50 +165,45 @@ namespace BPTracker
                                 }
                             }
                             friendlistbuttonstate = false;
-                            //Debug
+                            
                             if (debug) MelonLogger.Msg("Friend Board Checked.");
                         }
 
                         //Recent List
-                        if (recentupdate == 1)
+                        if (recentdelaydone)
                         {
-                            if (boarddelay > 90)
+                            for (int i = 0; i < Tags.Length; i++)
                             {
-                                for (int i = 0; i < Tags.Length; i++)
-                                {
-                                    GetFromBoardList(RecentList + Tags[i]);
+                                GetFromBoardList(objprefix + RecentList + Tags[i]);
 
-                                    if (currentName != "")
-                                    {
-                                        SearchandReplaceInFile(currentName, currentBP);
-                                    }
+                                if (currentName != "")
+                                {
+                                    SearchandReplaceInFile(currentName, currentBP);
                                 }
-                                recentupdate = 2;
-                                //Debug
-                                if (debug) MelonLogger.Msg("Recent Board Checked");
                             }
-                            boarddelay++;
+                            recentlockout = true;
+                            
+                            if (debug) MelonLogger.Msg("Recent Board Checked");
                         }
 
-                        //Debug
+                        
                         if (debug) MelonLogger.Msg("Something evaluated.");
 
                     }
-                    if (loaddelay > 0)
-                    {
-                        loaddelay--;
-                        if (debug && loaddelay == 1) MelonLogger.Msg("LoadDelay over.");
-                    }
+
 
                 }
             }
-            catch 
+            catch
             {
-
+                if ((friendlistbuttonstate | scenechanged | recentdelaydone) && loaddelaydone)
+                {
+                    if (debug) MelonLogger.Msg("Try Failed.");
+                }
             }
         }
 
-        //Custom Functions
+        //Functions
         public void GetFromBoardList(string TagString)
         {
             playertag = GameObject.Find(TagString).GetComponent<PlayerTag>();
@@ -206,33 +219,13 @@ namespace BPTracker
                 currentBP = "";
             }
         }
-        
-        public void GetRecentPageStatus()
-        {
-            phonepage = GameObject.Find("--------------LOGIC--------------/Heinhouser products/Telephone 2.0 REDUX special edition/Recent Screen").GetComponent<PhonePage>();
-
-            if (!phonepage.pagePositionIsUpdating && !phonepage.pageActivated && recentupdate == 2)
-            {
-                recentupdate = 0;
-                boarddelay = 0;
-                //Debug
-                if (debug) MelonLogger.Msg("Recent Board OFF");
-            }
-            if (!phonepage.pagePositionIsUpdating && phonepage.pageActivated && recentupdate == 0)
-            {
-                recentupdate = 1;
-                boarddelay = 0;
-                //Debug
-                if (debug) MelonLogger.Msg("Recent Board ON");
-            }
-        }
-
+       
         public void GetFriendListButtonStatus()
         {
-            b1 = GameObject.Find(ScrollUp).GetComponent<InteractionButton>();
-            b2 = GameObject.Find(ScrollDown).GetComponent<InteractionButton>();
-            b3 = GameObject.Find(PageUp).GetComponent<InteractionButton>();
-            b4 = GameObject.Find(PageDown).GetComponent<InteractionButton>();
+            b1 = GameObject.Find(objprefix + ScrollUp).GetComponent<InteractionButton>();
+            b2 = GameObject.Find(objprefix + ScrollDown).GetComponent<InteractionButton>();
+            b3 = GameObject.Find(objprefix + PageUp).GetComponent<InteractionButton>();
+            b4 = GameObject.Find(objprefix + PageDown).GetComponent<InteractionButton>();
             if (!b1.isPressed && !b2.isPressed && !b3.isPressed && !b4.isPressed && !friendlistbuttonwait)
             {
                 friendlistbuttonwait = true;
@@ -243,6 +236,73 @@ namespace BPTracker
                 friendlistbuttonwait = false;
                 friendlistbuttonstate = true;
                 if (debug) MelonLogger.Msg("Button pressed.");
+            }
+        }
+
+        public void GetRecentPageStatus()
+        {
+            phonepage = GameObject.Find(objprefix + SlidingObject).GetComponent<PhonePage>();
+
+            if (!phonepage.pagePositionIsUpdating && !phonepage.pageActivated && recentleverlockout)
+            {
+                recentdelaydone = false;
+                recentlockout = false;
+                recentleverlockout = false;
+                
+                if (debug) MelonLogger.Msg("Recent Board: OFF");
+            }
+            if (!phonepage.pagePositionIsUpdating && phonepage.pageActivated && !recentlockout && !recentleverlockout && !recentdelaydone)
+            {
+                boarddelay = DateTime.Now.AddSeconds(RecentDelay);
+                recentleverlockout = true;
+                
+                if (debug) MelonLogger.Msg("Recent Board: Delay Start");
+                if (debug) MelonLogger.Msg(boarddelay.ToString());
+            }
+            if (DateTime.Now >= boarddelay && recentleverlockout && !recentdelaydone)
+            {
+                recentdelaydone = true;
+                
+                if (debug) MelonLogger.Msg("Recent Board: Delay Done");
+            }
+        }
+
+        public void LoadDelayLogic()
+        {
+            if (scenechanged && !loaddelaydone && !loadlockout)
+            {
+                loaddelay = DateTime.Now.AddSeconds(SceneDelay);
+                loadlockout = true;
+                if (debug) MelonLogger.Msg("LoadDelay: Start.");
+                if (debug) MelonLogger.Msg(loaddelay.ToString());
+            }
+            if (DateTime.Now >= loaddelay && !loaddelaydone)
+            {
+                loaddelaydone = true;
+                if (debug) MelonLogger.Msg("LoadDelay: End.");
+            }
+        }
+
+        public void SwapPrefix()
+        {
+            if(scenechanged && !prefixlockout)
+            {
+                switch (currentScene)
+                {
+                    case "Gym":
+                        objprefix = GymPrefix;
+                        prefixlockout = true;   
+                        if (debug) MelonLogger.Msg("Prefix changed to Gym.");
+                        break;
+                    case "Park":
+                        objprefix = ParkPrefix;
+                        prefixlockout = true;
+                        scenechanged = false;
+                        if (debug) MelonLogger.Msg("Prefix changed to Park.");
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
@@ -285,7 +345,7 @@ namespace BPTracker
 
             if (System.IO.File.Exists(LogFilePath))
             {
-                string[] fileContents = System.IO.File.ReadAllLines(LogFilePath);
+                string[] fileContents = File.ReadAllLines(LogFilePath);
 
                 foreach(var item in fileContents)
                 {
@@ -303,12 +363,12 @@ namespace BPTracker
                         fileContents[Line] = FormatForFile(Input, Input2);
                         File.WriteAllLines(LogFilePath, fileContents);
 
-                        //Debug
+                        
                         if (debug) MelonLogger.Msg("Changed: " + Input + " " + Input2 + " in Line: " + Line.ToString());
                     }
                     else
                     {
-                        //Debug
+                        
                         if (debug) MelonLogger.Msg("Changed Nothing in Line " + Line.ToString());
                     }
                 }
@@ -316,28 +376,36 @@ namespace BPTracker
                 {
                     File.AppendAllText(LogFilePath, FormatForFile(Input, Input2));
 
-                    //Debug
+                    
                     if (debug) MelonLogger.Msg("Appended: " + Input + " " + Input2);
                 }
+                RemoveEmptyLinesFromFile();
             }
             else
             {
                 File.AppendAllText(LogFilePath, FormatForFile("Name", "BP"));
                 File.AppendAllText(LogFilePath, FormatForFile(Input, Input2));
 
-                //Debug
+                
                 if (debug) MelonLogger.Msg("NF Appended: " + Input + " " + Input2);
             }
+
         }
 
+        public void RemoveEmptyLinesFromFile()
+        {
+            File.WriteAllLines(LogFilePath, System.IO.File.ReadAllLines(LogFilePath).Where(l => !string.IsNullOrWhiteSpace(l)));
+        }
 
-        //Methods
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             base.OnSceneWasLoaded(buildIndex, sceneName);
             currentScene = sceneName;
-            loaddelay = SceneDelay;
             scenechanged = true;
+            loaddelaydone = false; 
+            prefixlockout = false;
+            loadlockout = false;
+            if (debug) MelonLogger.Msg("Scene changed to " + currentScene.ToString() + " = " + scenechanged.ToString());
         }
 
 
