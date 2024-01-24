@@ -1,9 +1,3 @@
-## Installation Instructions
-1. Install MelonLoader
-2. Run Game
-3. Drop Mods Folder in to Rumble Source Directory
-4. Run the Game and enjoy the mod
-
 ## Overview
 The Mod logs every player in the leaderboard and your friends/recent list and writes their BP amount into a file.
 
