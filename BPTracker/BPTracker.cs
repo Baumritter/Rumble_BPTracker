@@ -73,6 +73,7 @@ namespace BPTracker
         private string currentScene = "";
         private string currentName = "";
         private string currentBP = "";
+        private string currentplatform = "";
         private string objprefix = "";
         //--------------------------------------------------
         //--------------------------------------------------
@@ -143,7 +144,7 @@ namespace BPTracker
 
                                 if (currentName != "")
                                 {
-                                    SearchandReplaceInFile(currentName, currentBP);
+                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
                                 }
                             }
                             scenechanged = false;
@@ -161,7 +162,7 @@ namespace BPTracker
 
                                 if (currentName != "")
                                 {
-                                    SearchandReplaceInFile(currentName, currentBP);
+                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
                                 }
                             }
                             friendlistbuttonstate = false;
@@ -178,7 +179,7 @@ namespace BPTracker
 
                                 if (currentName != "")
                                 {
-                                    SearchandReplaceInFile(currentName, currentBP);
+                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
                                 }
                             }
                             recentlockout = true;
@@ -206,12 +207,27 @@ namespace BPTracker
         //Functions
         public void GetFromBoardList(string TagString)
         {
+            char temp;
             playertag = GameObject.Find(TagString).GetComponent<PlayerTag>();
             if (playertag.UserData != null && playertag.isActiveAndEnabled)
             {
                 currentName = playertag.UserData.publicName.ToString() ;
                 currentName = SanitizeName(currentName) ;
                 currentBP = playertag.UserData.battlePoints.ToString();
+                temp = playertag.UserData.platformId;
+                switch (temp)
+                {
+                    case 'O':
+                        currentplatform = "Oculus";
+                        break;
+                    case 'S':
+                        currentplatform = "Steam";
+                        break;
+                    default:
+                        currentplatform = "Unknown";
+                        break;
+                }
+                
             }
             else
             {
@@ -333,12 +349,12 @@ namespace BPTracker
             return Output;
         }
 
-        public string FormatForFile(string st1, string st2)
+        public string FormatForFile(string st1, string st2, string st3)
         {
-            return st1 + ";" + st2 + Environment.NewLine;
+            return st1 + ";" + st2 + ";" + st3 + Environment.NewLine;
         }
 
-        public void SearchandReplaceInFile(string Input,string Input2)
+        public void SearchandReplaceInFile(string Input,string Input2,string Input3)
         {
             int Line = -1;
             int loop = 0;
@@ -360,7 +376,7 @@ namespace BPTracker
                 {
                     if (!fileContents[Line].Contains(Input2))
                     {
-                        fileContents[Line] = FormatForFile(Input, Input2);
+                        fileContents[Line] = FormatForFile(Input2, Input,Input3);
                         File.WriteAllLines(LogFilePath, fileContents);
 
                         
@@ -374,7 +390,7 @@ namespace BPTracker
                 }
                 else
                 {
-                    File.AppendAllText(LogFilePath, FormatForFile(Input, Input2));
+                    File.AppendAllText(LogFilePath, FormatForFile(Input2, Input, Input3));
 
                     
                     if (debug) MelonLogger.Msg("Appended: " + Input + " " + Input2);
@@ -383,8 +399,8 @@ namespace BPTracker
             }
             else
             {
-                File.AppendAllText(LogFilePath, FormatForFile("Name", "BP"));
-                File.AppendAllText(LogFilePath, FormatForFile(Input, Input2));
+                File.AppendAllText(LogFilePath, FormatForFile("BP", "Name","Platform"));
+                File.AppendAllText(LogFilePath, FormatForFile(Input2, Input, Input3));
 
                 
                 if (debug) MelonLogger.Msg("NF Appended: " + Input + " " + Input2);
