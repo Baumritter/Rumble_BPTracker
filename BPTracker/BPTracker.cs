@@ -66,6 +66,7 @@ namespace BPTracker
         private bool recentlockout = false;
         private bool recentleverlockout = false;
         private bool prefixlockout = false;
+        private bool logfileerror = false;
 
         private DateTime boarddelay;
         private DateTime loaddelay;
@@ -75,6 +76,7 @@ namespace BPTracker
         private string currentBP = "";
         private string currentplatform = "";
         private string objprefix = "";
+        private string listseparator;
         //--------------------------------------------------
         //--------------------------------------------------
 
@@ -114,6 +116,7 @@ namespace BPTracker
             Tags2[3] = HTag_4;
             Tags2[4] = HTag_5;
             Tags2[5] = HTag_P;
+            listseparator = ",";
         }
 
         //Run every update
@@ -122,86 +125,93 @@ namespace BPTracker
             //Base Updates
             base.OnUpdate();
 
-            LoadDelayLogic();
-            SwapPrefix();
-
-            try
+            if (!logfileerror)
             {
-                if (currentScene == "Gym" || currentScene == "Park")
+                LoadDelayLogic();
+                SwapPrefix();
+
+                try
                 {
-                    //Check for FriendList/RecentList Trigger
-                    GetFriendListButtonStatus();
-                    GetRecentPageStatus();
-
-                    if ((friendlistbuttonstate | scenechanged | (recentdelaydone && !recentlockout)) && loaddelaydone)
+                    if ((currentScene == "Gym" || currentScene == "Park"))
                     {
-                        //Leaderboard
-                        if (scenechanged && currentScene == "Gym")
-                        {
-                            for (int i = 0; i < Tags.Length; i++)
-                            {
-                                GetFromBoardList(Leaderboard + Tags2[i] + Tags[0]);
+                        //Check for FriendList/RecentList Trigger
+                        GetFriendListButtonStatus();
+                        GetRecentPageStatus();
 
-                                if (currentName != "")
+                        if ((friendlistbuttonstate | scenechanged | (recentdelaydone && !recentlockout)) && loaddelaydone)
+                        {
+                            //Leaderboard
+                            if (scenechanged && currentScene == "Gym")
+                            {
+                                for (int i = 0; i < Tags.Length; i++)
                                 {
-                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                    GetFromBoardList(Leaderboard + Tags2[i] + Tags[0]);
+
+                                    if (currentName != "")
+                                    {
+                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        if (logfileerror) return;
+                                    }
                                 }
+                                scenechanged = false;
+
+                                if (debug) MelonLogger.Msg("Leaderboard Checked.");
+
                             }
-                            scenechanged = false;
-                            
-                            if (debug) MelonLogger.Msg("Leaderboard Checked.");
+
+                            //Friend List
+                            if (friendlistbuttonstate)
+                            {
+                                for (int i = 0; i < Tags.Length; i++)
+                                {
+                                    GetFromBoardList(objprefix + FriendList + Tags[i]);
+
+                                    if (currentName != "")
+                                    {
+                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        if (logfileerror) return;
+                                    }
+                                }
+                                friendlistbuttonstate = false;
+
+                                if (debug) MelonLogger.Msg("Friend Board Checked.");
+                            }
+
+                            //Recent List
+                            if (recentdelaydone)
+                            {
+                                for (int i = 0; i < Tags.Length; i++)
+                                {
+                                    GetFromBoardList(objprefix + RecentList + Tags[i]);
+
+                                    if (currentName != "")
+                                    {
+                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        if (logfileerror) return;
+                                    }
+                                }
+                                recentlockout = true;
+                                if (debug) MelonLogger.Msg("Recent Board Checked");
+                            }
+
+
+                            if (debug) MelonLogger.Msg("Something evaluated.");
 
                         }
 
-                        //Friend List
-                        if (friendlistbuttonstate)
-                        {
-                            for (int i = 0; i < Tags.Length; i++)
-                            {
-                                GetFromBoardList(objprefix + FriendList + Tags[i]);
-
-                                if (currentName != "")
-                                {
-                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
-                                }
-                            }
-                            friendlistbuttonstate = false;
-                            
-                            if (debug) MelonLogger.Msg("Friend Board Checked.");
-                        }
-
-                        //Recent List
-                        if (recentdelaydone)
-                        {
-                            for (int i = 0; i < Tags.Length; i++)
-                            {
-                                GetFromBoardList(objprefix + RecentList + Tags[i]);
-
-                                if (currentName != "")
-                                {
-                                    SearchandReplaceInFile(currentName, currentBP, currentplatform);
-                                }
-                            }
-                            recentlockout = true;
-                            
-                            if (debug) MelonLogger.Msg("Recent Board Checked");
-                        }
-
-                        
-                        if (debug) MelonLogger.Msg("Something evaluated.");
 
                     }
-
-
                 }
-            }
-            catch
-            {
-                if ((friendlistbuttonstate | scenechanged | recentdelaydone) && loaddelaydone)
+                catch
                 {
-                    if (debug) MelonLogger.Msg("Try Failed.");
+                    if ((friendlistbuttonstate | scenechanged | recentdelaydone) && loaddelaydone)
+                    {
+                        if (debug) MelonLogger.Msg("Try Failed.");
+                    }
                 }
+
             }
+
         }
 
         //Functions
@@ -330,9 +340,9 @@ namespace BPTracker
 
             for(int c = 0; c < Input.Length;c++)
             {
-                if (chars[c] == '<')
+                if (chars[c] == '<' && c != Input.Length)
                 {
-                    if (chars[c+1] == '#')
+                    if (chars[c+1] == '#' || chars[c + 1] == 'c')
                     {
                         RemoveChars = true;
                     }
@@ -351,17 +361,28 @@ namespace BPTracker
 
         public string FormatForFile(string st1, string st2, string st3)
         {
-            return st1 + ";" + st2 + ";" + st3 + Environment.NewLine;
+            return st1 + listseparator + st2 + listseparator + st3 + Environment.NewLine;
         }
 
         public void SearchandReplaceInFile(string Input,string Input2,string Input3)
         {
             int Line = -1;
             int loop = 0;
+            string[] fileContents = null;
+
 
             if (System.IO.File.Exists(LogFilePath))
             {
-                string[] fileContents = File.ReadAllLines(LogFilePath);
+                try
+                {
+                     fileContents = File.ReadAllLines(LogFilePath);
+                }
+                catch
+                {
+                    MelonLogger.Msg("CLOSE THE LOG FILE. EXECUTION SUSPENDED UNTIL NEXT SCENE CHANGE.");
+                    logfileerror = true;
+                    return;
+                }
 
                 foreach(var item in fileContents)
                 {
@@ -421,6 +442,7 @@ namespace BPTracker
             loaddelaydone = false; 
             prefixlockout = false;
             loadlockout = false;
+            logfileerror = false;
             if (debug) MelonLogger.Msg("Scene changed to " + currentScene.ToString() + " = " + scenechanged.ToString());
         }
 

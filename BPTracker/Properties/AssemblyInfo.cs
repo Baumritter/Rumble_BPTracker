@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using MelonLoader;
 using BPTracker; // The namespace of your mod class
 // ...
-[assembly: MelonInfo(typeof(BPTrackerClass), "BPTracker", "1.1.0", "Baumritter")]
+[assembly: MelonInfo(typeof(BPTrackerClass), "BPTracker", "1.1.1", "Baumritter")]
 [assembly: MelonGame("Buckethead Entertainment", "RUMBLE")]
 
 // General Information about an assembly is controlled through the following
