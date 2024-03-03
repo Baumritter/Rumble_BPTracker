@@ -21,6 +21,7 @@ The Mod logs every player in the leaderboard and your friends/recent list and wr
 
 ## Known Issues
 - Using "<#" without following it by ">" will mess up your name in the logs after that usage.
+- Commas "," in your name will be deleted in the log file. This is intended behaviour as it is necessary for the log file to work
 
 ## Help And Other Resources
 Get help and find other resources in the Modding Discord:

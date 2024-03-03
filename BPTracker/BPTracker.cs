@@ -5,118 +5,127 @@ using RUMBLE.Social.Phone;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+
 namespace BPTracker
 {
+    public class PlayerInfo
+    {
+        private readonly string listseparator = ",";
+        public string Username { get; set; }
+        public string BattlePoints { get; set; }
+        public string Platform { get; set; }
+        public string UserID { get; set; }
+        public string BPChangeTime { get; set; }
+
+        public string ReturnFileString()
+        {
+            return BattlePoints + listseparator + Username + listseparator + Platform + listseparator + UserID + listseparator + BPChangeTime + Environment.NewLine;
+        }
+
+        public void SanitizeName(string Input)
+        {
+            bool RemoveChars = false;
+            char[] chars = Input.ToCharArray();
+            string Output = "";
+
+            if (Input.Contains("<u>")) Input.Replace("<u>", "");
+            if (Input.Contains(",")) Input.Replace(",", "");
+
+            for (int c = 0; c < Input.Length; c++)
+            {
+                if (chars[c] == '<' && c != Input.Length)
+                {
+                    if (chars[c + 1] == '#' || chars[c + 1] == 'c')
+                    {
+                        RemoveChars = true;
+                    }
+                }
+                if (!RemoveChars)
+                {
+                    Output += chars[c];
+                }
+                if (chars[c] == '>')
+                {
+                    RemoveChars = false;
+                }
+            }
+            this.Username = Output;
+        }
+
+
+    }
     public class BPTrackerClass : MelonMod
     {
-        //--------------------------------------------------
-        //--------------------------------------------------
         //constants
         private const double SceneDelay = 5.0;
         private const double RecentDelay = 5.0;
 
         private const string LogFilePath = @"UserData\BPTracker\Logs\BPList.csv";
-        private const string PTag_1 = "Player Tag 2.0";
-        private const string PTag_2 = "Player Tag 2.0 (1)";
-        private const string PTag_3 = "Player Tag 2.0 (2)";
-        private const string PTag_4 = "Player Tag 2.0 (3)";
-        private const string PTag_5 = "Player Tag 2.0 (4)";
-        private const string PTag_6 = "Player Tag 2.0 (5)";
 
-        //friendlist
+        //game objects
         private const string FriendList = "/Telephone 2.0 REDUX special edition/Friend Screen/Player Tags/";
         private const string PageDown = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageDownButton/Button";
         private const string PageUp = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/PageUpButton/Button";
         private const string ScrollDown = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollDownButton/Button";
         private const string ScrollUp = "/Telephone 2.0 REDUX special edition/Friend Screen/Friend Scroll Bar/ScrollUpButton/Button";
-
-        //recentlist
         private const string RecentList = "/Telephone 2.0 REDUX special edition/Recent Screen/Player Tags/";
         private const string SlidingObject = "/Telephone 2.0 REDUX special edition/Recent Screen";
-
-        //park-string
         private const string ParkPrefix = "________________LOGIC__________________ /Heinhouwser products";
-
-        //gym-string
         private const string GymPrefix = "--------------LOGIC--------------/Heinhouser products";
-
-        //leaderboard
         private const string Leaderboard = "--------------LOGIC--------------/Heinhouser products/Leaderboard/Player Tags/";
-        private const string HTag_1 = "HighscoreTag/";
-        private const string HTag_2 = "HighscoreTag (1)/";
-        private const string HTag_3 = "HighscoreTag (2)/";
-        private const string HTag_4 = "HighscoreTag (3)/";
-        private const string HTag_5 = "HighscoreTag (4)/";
-        private const string HTag_P = "PersonalHighscoreTag/";
 
-        //--------------------------------------------------
-        //--------------------------------------------------
-
-
-        //--------------------------------------------------
-        //--------------------------------------------------
         //variables
         private readonly bool debug = false;
         private bool friendlistbuttonstate = false;
         private bool friendlistbuttonwait = false;
         private bool scenechanged = false;
-        private bool loaddelaydone = false;
-        private bool loadlockout = false;
-        private bool recentdelaydone = false;
-        private bool recentlockout = false;
         private bool recentleverlockout = false;
         private bool prefixlockout = false;
         private bool logfileerror = false;
 
-        private DateTime boarddelay;
-        private DateTime loaddelay;
-
         private string currentScene = "";
-        private string currentName = "";
-        private string currentBP = "";
-        private string currentplatform = "";
         private string objprefix = "";
-        private string listseparator;
-        //--------------------------------------------------
-        //--------------------------------------------------
 
-        //--------------------------------------------------
-        //--------------------------------------------------
         //objects
+        private PlayerInfo InfoObj;
         private PlayerTag playertag;
         private PhonePage phonepage;
         private InteractionButton b1;
         private InteractionButton b2;
         private InteractionButton b3;
         private InteractionButton b4;
-        //--------------------------------------------------
-        //--------------------------------------------------
 
-        //--------------------------------------------------
-        //--------------------------------------------------
+        private Delay Delay_SceneLoad = new Delay { name = "LoadDelay" };
+        private Delay Delay_RecentBoard = new Delay { name = "RecentDelay" };
+        private Folders folders = new Folders();
+
+
         //structures/arrays/lists
         private string[] Tags = new string[6];
         private string[] Tags2 = new string[6];
-        //--------------------------------------------------
-        //--------------------------------------------------
+
 
         //initializes things
         public override void OnLateInitializeMelon()
         {
             base.OnLateInitializeMelon();
-            Tags[0] = PTag_1;
-            Tags[1] = PTag_2;
-            Tags[2] = PTag_3;
-            Tags[3] = PTag_4;
-            Tags[4] = PTag_5;
-            Tags[5] = PTag_6;
-            Tags2[0] = HTag_1;
-            Tags2[1] = HTag_2;
-            Tags2[2] = HTag_3;
-            Tags2[3] = HTag_4;
-            Tags2[4] = HTag_5;
-            Tags2[5] = HTag_P;
-            listseparator = ",";
+
+            folders.SetModFolderNamespace();
+            folders.AddSubFolder("Logs");
+            folders.CheckAllFoldersExist();
+
+            Tags[0] = "Player Tag 2.0";
+            Tags[1] = "Player Tag 2.0 (1)";
+            Tags[2] = "Player Tag 2.0 (2)";
+            Tags[3] = "Player Tag 2.0 (3)";
+            Tags[4] = "Player Tag 2.0 (4)";
+            Tags[5] = "Player Tag 2.0 (5)";
+            Tags2[0] = "HighscoreTag/";
+            Tags2[1] = "HighscoreTag (1)/";
+            Tags2[2] = "HighscoreTag (2)/";
+            Tags2[3] = "HighscoreTag (3)/";
+            Tags2[4] = "HighscoreTag (4)/";
+            Tags2[5] = "PersonalHighscoreTag/";
         }
 
         //Run every update
@@ -127,7 +136,6 @@ namespace BPTracker
 
             if (!logfileerror)
             {
-                LoadDelayLogic();
                 SwapPrefix();
 
                 try
@@ -138,18 +146,18 @@ namespace BPTracker
                         GetFriendListButtonStatus();
                         GetRecentPageStatus();
 
-                        if ((friendlistbuttonstate | scenechanged | (recentdelaydone && !recentlockout)) && loaddelaydone)
+                        if ((friendlistbuttonstate | scenechanged | Delay_RecentBoard.Done) && Delay_SceneLoad.Done)
                         {
                             //Leaderboard
                             if (scenechanged && currentScene == "Gym")
                             {
                                 for (int i = 0; i < Tags.Length; i++)
                                 {
-                                    GetFromBoardList(Leaderboard + Tags2[i] + Tags[0]);
+                                    InfoObj = GetFromBoardList(Leaderboard + Tags2[i] + Tags[0]);
 
-                                    if (currentName != "")
+                                    if (InfoObj != null)
                                     {
-                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        SearchandReplaceInFile(InfoObj);
                                         if (logfileerror) return;
                                     }
                                 }
@@ -164,11 +172,11 @@ namespace BPTracker
                             {
                                 for (int i = 0; i < Tags.Length; i++)
                                 {
-                                    GetFromBoardList(objprefix + FriendList + Tags[i]);
+                                    InfoObj = GetFromBoardList(objprefix + FriendList + Tags[i]);
 
-                                    if (currentName != "")
+                                    if (InfoObj != null)
                                     {
-                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        SearchandReplaceInFile(InfoObj);
                                         if (logfileerror) return;
                                     }
                                 }
@@ -178,19 +186,18 @@ namespace BPTracker
                             }
 
                             //Recent List
-                            if (recentdelaydone)
+                            if (Delay_RecentBoard.Done)
                             {
                                 for (int i = 0; i < Tags.Length; i++)
                                 {
-                                    GetFromBoardList(objprefix + RecentList + Tags[i]);
+                                    InfoObj = GetFromBoardList(objprefix + RecentList + Tags[i]);
 
-                                    if (currentName != "")
+                                    if (InfoObj != null)
                                     {
-                                        SearchandReplaceInFile(currentName, currentBP, currentplatform);
+                                        SearchandReplaceInFile(InfoObj);
                                         if (logfileerror) return;
                                     }
                                 }
-                                recentlockout = true;
                                 if (debug) MelonLogger.Msg("Recent Board Checked");
                             }
 
@@ -204,7 +211,7 @@ namespace BPTracker
                 }
                 catch
                 {
-                    if ((friendlistbuttonstate | scenechanged | recentdelaydone) && loaddelaydone)
+                    if ((friendlistbuttonstate | scenechanged | Delay_RecentBoard.Done) && Delay_SceneLoad.Done)
                     {
                         if (debug) MelonLogger.Msg("Try Failed.");
                     }
@@ -215,37 +222,40 @@ namespace BPTracker
         }
 
         //Functions
-        public void GetFromBoardList(string TagString)
+        #region Information Acquisition
+        public PlayerInfo GetFromBoardList(string TagString)
         {
             char temp;
+            PlayerInfo playerInfo = new PlayerInfo();
             playertag = GameObject.Find(TagString).GetComponent<PlayerTag>();
             if (playertag.UserData != null && playertag.isActiveAndEnabled)
             {
-                currentName = playertag.UserData.publicName.ToString() ;
-                currentName = SanitizeName(currentName) ;
-                currentBP = playertag.UserData.battlePoints.ToString();
+
+                playerInfo.SanitizeName(playertag.UserData.publicName);
+                playerInfo.BattlePoints = playertag.UserData.battlePoints.ToString();
+                playerInfo.UserID = playertag.UserData.playFabId.ToString();   
+
                 temp = playertag.UserData.platformId;
                 switch (temp)
                 {
                     case 'O':
-                        currentplatform = "Oculus";
+                        playerInfo.Platform = "Oculus";
                         break;
                     case 'S':
-                        currentplatform = "Steam";
+                        playerInfo.Platform = "Steam";
                         break;
                     default:
-                        currentplatform = "Unknown";
+                        playerInfo.Platform = "Unknown";
                         break;
                 }
                 
             }
             else
             {
-                currentName = "";
-                currentBP = "";
+                playerInfo = null;
             }
+            return playerInfo;
         }
-       
         public void GetFriendListButtonStatus()
         {
             b1 = GameObject.Find(objprefix + ScrollUp).GetComponent<InteractionButton>();
@@ -264,51 +274,21 @@ namespace BPTracker
                 if (debug) MelonLogger.Msg("Button pressed.");
             }
         }
-
         public void GetRecentPageStatus()
         {
             phonepage = GameObject.Find(objprefix + SlidingObject).GetComponent<PhonePage>();
 
             if (!phonepage.pagePositionIsUpdating && !phonepage.pageActivated && recentleverlockout)
             {
-                recentdelaydone = false;
-                recentlockout = false;
+                Delay_RecentBoard.Done = false;
                 recentleverlockout = false;
-                
-                if (debug) MelonLogger.Msg("Recent Board: OFF");
             }
-            if (!phonepage.pagePositionIsUpdating && phonepage.pageActivated && !recentlockout && !recentleverlockout && !recentdelaydone)
+            if (!phonepage.pagePositionIsUpdating && phonepage.pageActivated && !Delay_RecentBoard.Done && !recentleverlockout)
             {
-                boarddelay = DateTime.Now.AddSeconds(RecentDelay);
+                Delay_RecentBoard.Delay_Start(RecentDelay);
                 recentleverlockout = true;
-                
-                if (debug) MelonLogger.Msg("Recent Board: Delay Start");
-                if (debug) MelonLogger.Msg(boarddelay.ToString());
-            }
-            if (DateTime.Now >= boarddelay && recentleverlockout && !recentdelaydone)
-            {
-                recentdelaydone = true;
-                
-                if (debug) MelonLogger.Msg("Recent Board: Delay Done");
             }
         }
-
-        public void LoadDelayLogic()
-        {
-            if (scenechanged && !loaddelaydone && !loadlockout)
-            {
-                loaddelay = DateTime.Now.AddSeconds(SceneDelay);
-                loadlockout = true;
-                if (debug) MelonLogger.Msg("LoadDelay: Start.");
-                if (debug) MelonLogger.Msg(loaddelay.ToString());
-            }
-            if (DateTime.Now >= loaddelay && !loaddelaydone)
-            {
-                loaddelaydone = true;
-                if (debug) MelonLogger.Msg("LoadDelay: End.");
-            }
-        }
-
         public void SwapPrefix()
         {
             if(scenechanged && !prefixlockout)
@@ -331,44 +311,13 @@ namespace BPTracker
                 }
             }
         }
+        #endregion
 
-        public string SanitizeName(string Input)
-        {
-            bool RemoveChars = false;
-            char[] chars = Input.ToCharArray();
-            string Output = "";
-
-            for(int c = 0; c < Input.Length;c++)
-            {
-                if (chars[c] == '<' && c != Input.Length)
-                {
-                    if (chars[c+1] == '#' || chars[c + 1] == 'c')
-                    {
-                        RemoveChars = true;
-                    }
-                }
-                if (!RemoveChars)
-                {
-                    Output = Output + chars[c];
-                }
-                if (chars[c] == '>')
-                {
-                    RemoveChars = false;
-                }
-            }
-            return Output;
-        }
-
-        public string FormatForFile(string st1, string st2, string st3)
-        {
-            return st1 + listseparator + st2 + listseparator + st3 + Environment.NewLine;
-        }
-
-        public void SearchandReplaceInFile(string Input,string Input2,string Input3)
+        public void SearchandReplaceInFile(PlayerInfo Input)
         {
             int Line = -1;
             int loop = 0;
-            string[] fileContents = null;
+            string[] fileContents;
 
 
             if (System.IO.File.Exists(LogFilePath))
@@ -386,22 +335,24 @@ namespace BPTracker
 
                 foreach(var item in fileContents)
                 {
-                    if (item.Contains(Input))
+                    if (item.Contains(Input.UserID))
                     {
                         Line = loop;
+                        break;
                     }
                     loop++;
                 }
 
                 if (Line != -1)
                 {
-                    if (!fileContents[Line].Contains(Input2))
+                    if (!fileContents[Line].Contains(Input.BattlePoints))
                     {
-                        fileContents[Line] = FormatForFile(Input2, Input,Input3);
+                        Input.BPChangeTime = DateTime.Now.ToString();
+                        fileContents[Line] = Input.ReturnFileString();
                         File.WriteAllLines(LogFilePath, fileContents);
 
                         
-                        if (debug) MelonLogger.Msg("Changed: " + Input + " " + Input2 + " in Line: " + Line.ToString());
+                        if (debug) MelonLogger.Msg("Changed: " + Input.UserID + " " + Input.Username + " " + Input.BattlePoints + " in Line: " + Line.ToString());
                     }
                     else
                     {
@@ -411,25 +362,26 @@ namespace BPTracker
                 }
                 else
                 {
-                    File.AppendAllText(LogFilePath, FormatForFile(Input2, Input, Input3));
+                    Input.BPChangeTime = "New Entry";
+                    File.AppendAllText(LogFilePath, Input.ReturnFileString());
 
                     
-                    if (debug) MelonLogger.Msg("Appended: " + Input + " " + Input2);
+                    if (debug) MelonLogger.Msg("Appended: " + Input.UserID + " " + Input.Username + " " + Input.BattlePoints);
                 }
                 RemoveEmptyLinesFromFile();
             }
             else
             {
-                File.AppendAllText(LogFilePath, FormatForFile("BP", "Name","Platform"));
-                File.AppendAllText(LogFilePath, FormatForFile(Input2, Input, Input3));
+                Input.BPChangeTime = "New Entry";
+                File.AppendAllText(LogFilePath, "BP,Name,Platform,UserID,LastChange" + Environment.NewLine);
+                File.AppendAllText(LogFilePath, Input.ReturnFileString());
 
                 
-                if (debug) MelonLogger.Msg("NF Appended: " + Input + " " + Input2);
+                if (debug) MelonLogger.Msg("NF Appended: " + Input.UserID + " " + Input.Username + " " + Input.BattlePoints);
             }
 
         }
-
-        public void RemoveEmptyLinesFromFile()
+        private void RemoveEmptyLinesFromFile()
         {
             File.WriteAllLines(LogFilePath, System.IO.File.ReadAllLines(LogFilePath).Where(l => !string.IsNullOrWhiteSpace(l)));
         }
@@ -439,10 +391,12 @@ namespace BPTracker
             base.OnSceneWasLoaded(buildIndex, sceneName);
             currentScene = sceneName;
             scenechanged = true;
-            loaddelaydone = false; 
+
             prefixlockout = false;
-            loadlockout = false;
             logfileerror = false;
+
+            Delay_SceneLoad.Delay_Start(SceneDelay);
+
             if (debug) MelonLogger.Msg("Scene changed to " + currentScene.ToString() + " = " + scenechanged.ToString());
         }
 
